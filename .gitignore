@@ -1,0 +1,4 @@
+checkpoints/
+data/
+split_dataset/
+__pycache__/
