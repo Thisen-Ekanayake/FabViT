@@ -1,0 +1,658 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SmallViT Anatomy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #EDEFF5;
+    --stage: #F7F8FB;
+    --surface: #FFFFFF;
+    --ink: #1B2033;
+    --muted: #5A6280;
+    --line: #CDD2E0;
+    --indigo: #3346A8;
+    --saffron: #D18A12;
+    --teal: #1D8679;
+    --rose: #C0403A;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0F121B;
+      --stage: #151927;
+      --surface: #1A1F2E;
+      --ink: #E5E8F1;
+      --muted: #939AB4;
+      --line: #2D3349;
+      --indigo: #8292F2;
+      --saffron: #F0B040;
+      --teal: #4FC6B6;
+      --rose: #F07068;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0F121B;
+    --stage: #151927;
+    --surface: #1A1F2E;
+    --ink: #E5E8F1;
+    --muted: #939AB4;
+    --line: #2D3349;
+    --indigo: #8292F2;
+    --saffron: #F0B040;
+    --teal: #4FC6B6;
+    --rose: #F07068;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 var(--sans);
+    padding: 12px 16px 16px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+
+  .bar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+  .brand h1 { font: 700 26px/1.1 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .brand p { margin: 2px 0 0; color: var(--muted); }
+  .brand .num { font-family: var(--mono); font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .picker { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  select {
+    font: 500 13px var(--mono); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 100%;
+  }
+  select:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+  .tag { display: inline-block; font: 500 11px var(--mono); padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+  .tag.ok { color: var(--teal); }
+  .tag.bad { color: var(--rose); }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .btn {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 6px;
+    padding: 6px 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { border-color: var(--indigo); }
+  .btn[aria-pressed="true"] { background: var(--indigo); border-color: var(--indigo); color: var(--surface); }
+  button:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+
+  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; }
+  .stage {
+    position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    background: radial-gradient(ellipse at 40% 30%, var(--surface), var(--stage) 70%);
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .hint {
+    position: absolute; left: 12px; bottom: 10px; right: 12px; pointer-events: none;
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px;
+    font: 12px/1.4 var(--mono); color: var(--muted);
+  }
+  .legend { display: flex; gap: 12px; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  .panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: step; }
+  .steps > li { counter-increment: step; }
+  .step {
+    width: 100%; display: grid; grid-template-columns: 22px 1fr auto; align-items: baseline; gap: 8px;
+    border: 0; background: none; text-align: left; padding: 5px 8px; border-radius: 6px;
+  }
+  .step::before, .enc-label::before { content: counter(step); font: 500 11px var(--mono); color: var(--muted); }
+  .step small, .enc-label small { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .step:hover { background: var(--surface); }
+  .step[aria-current="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; }
+  .enc { padding: 5px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .enc-label { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; }
+  .chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-left: 30px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 5px; padding: 3px 0;
+    font: 500 12px var(--mono);
+  }
+  .chip:hover { border-color: var(--indigo); }
+  .chip[aria-current="true"] { background: var(--indigo); border-color: var(--indigo); color: var(--surface); }
+
+  .detail { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .eyebrow { font: 500 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .detail h2 { font: 700 22px/1.15 var(--display); margin: 0; text-wrap: balance; }
+  .detail p { margin: 0; color: var(--ink); max-width: 65ch; }
+  .detail .note { color: var(--muted); font-size: 12.5px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font: 13px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  code, .code { font: 12.5px/1.5 var(--mono); }
+  .code { display: block; background: var(--stage); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+  .block { display: flex; flex-direction: column; gap: 3px; }
+  .block div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 5px; background: var(--stage); font-size: 13px; }
+  .block div.res { background: none; color: var(--muted); padding-block: 0; font: 12px var(--mono); }
+  .block span:last-child { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .heat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .heat figure { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .heat canvas { width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 4px; }
+  .heat figcaption { font: 11.5px var(--mono); color: var(--muted); }
+  .bars { display: flex; flex-direction: column; gap: 4px; }
+  .barrow { display: grid; grid-template-columns: 104px 1fr 44px; gap: 8px; align-items: center; font-size: 12.5px; }
+  .barrow .track { height: 8px; background: var(--stage); border-radius: 4px; overflow: hidden; }
+  .barrow .fill { height: 100%; border-radius: 4px; background: var(--indigo); }
+  .barrow .pct { font: 12px var(--mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .barrow.top .fill { background: var(--saffron); }
+  .barrow.top { font-weight: 600; }
+  .swatch { width: 100%; max-width: 180px; aspect-ratio: 1; border-radius: 6px; image-rendering: pixelated; }
+  .nav { display: flex; justify-content: space-between; gap: 8px; }
+  .foot { color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 860px) {
+    html, body { height: auto; }
+    .app { grid-template-columns: 1fr; }
+    .stage { height: 58svh; min-height: 320px; }
+    .panel { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<header class="bar">
+  <div class="brand">
+    <h1>SmallViT Anatomy</h1>
+    <p>Fabric pattern and defect classifier from <code>src/model.py</code> · <span class="num">2,859,285</span> parameters</p>
+  </div>
+  <div class="controls">
+    <label class="picker" for="sample">Test image <select id="sample"></select></label>
+    <button class="btn" id="overview" type="button">Overview</button>
+    <button class="btn" id="play" type="button" aria-pressed="false">Play data flow</button>
+    <button class="btn" id="attn" type="button" aria-pressed="true">Attention lines</button>
+  </div>
+</header>
+
+<main class="app">
+  <div class="stage" id="stage">
+    <div class="hint">
+      <span>Drag to orbit · scroll to zoom · click a layer · ← → to step</span>
+      <span class="legend"><span><i style="background:var(--indigo)"></i>head 1</span><span><i style="background:var(--saffron)"></i>head 2</span><span><i style="background:var(--teal)"></i>head 3</span></span>
+    </div>
+  </div>
+  <aside class="panel">
+    <ol class="steps" id="steps"></ol>
+    <section class="detail" id="detail" aria-live="polite"></section>
+    <p class="foot" id="foot"></p>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<!-- Generated by src/export_viz.py from checkpoints/best_model.pth -->
+<script src="data.js"></script>
+<script>
+(() => {
+  // ---------- model facts (from src/model.py + src/config.py) ----------
+  const G = 14, N = 196, T = 197, S = 0.22;
+  const SLAB_X = [3, 5, 7.5, 9.5, 11.5, 13.5, 15.5, 17.5, 20];
+  const HEAD_X = { pattern: 23.2, defect: 26.4 };
+  const fmt = n => n.toLocaleString("en-US");
+  const pct = (v, d = 1) => (v * 100).toFixed(d) + "%";
+
+  // ---------- real data from src/export_viz.py ----------
+  const DATA = window.VIZ_DATA;
+  if (!DATA) {
+    document.getElementById("stage").insertAdjacentHTML("beforeend",
+      '<p class="empty">No data found. Run <code>python src/export_viz.py</code> from the repo root to create viz/data.js.</p>');
+    return;
+  }
+  const PATTERNS = DATA.pattern_classes, DEFECTS = DATA.defect_classes;
+  let SAMPLE = DATA.samples[0];
+  const argmax = a => a.indexOf(Math.max(...a));
+
+  const STAGES = [
+    { key: "input", name: "Input image", small: "3×224×224", x: 0, slabs: [] },
+    { key: "embed", name: "Patch embedding", small: "196×192", x: SLAB_X[0], slabs: [0] },
+    { key: "pos", name: "CLS + position", small: "197×192", x: SLAB_X[1], slabs: [1] },
+    ...[1, 2, 3, 4, 5, 6].map(l => ({ key: "L" + l, name: "Encoder layer " + l, layer: l, x: SLAB_X[l + 1], slabs: [l + 1] })),
+    { key: "norm", name: "Final LayerNorm", small: "192", x: SLAB_X[8], slabs: [8] },
+    { key: "heads", name: "Classification heads", small: "19 + 2", x: 24.8, slabs: [] },
+  ];
+
+  // ---------- theme ----------
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  let TH = {};
+  function readTheme() {
+    ["bg","stage","surface","ink","muted","line","indigo","saffron","teal","rose"].forEach(k => TH[k] = new THREE.Color(css("--" + k)));
+    TH.hex = k => "#" + TH[k].getHexString();
+  }
+
+  // ---------- current sample: image, defect boxes, patch colors ----------
+  const swatch = document.createElement("canvas");
+  swatch.width = swatch.height = 224;
+  let patchColor = Array.from({ length: N }, () => new THREE.Color(0.5, 0.5, 0.5));
+  function patchesInBoxes(boxes) {
+    const set = new Set();
+    for (let i = 0; i < N; i++) {
+      const x = (i % G) * 16, y = Math.floor(i / G) * 16;
+      if (boxes.some(([x0, y0, x1, y1]) => x < x1 && x + 16 > x0 && y < y1 && y + 16 > y0)) set.add(i);
+    }
+    return set;
+  }
+  let defectPatches = new Set();
+  function paintSwatch(imgEl) {
+    const c = swatch.getContext("2d");
+    c.drawImage(imgEl, 0, 0, 224, 224);
+    const d = c.getImageData(0, 0, 224, 224).data;
+    patchColor = [];
+    for (let i = 0; i < N; i++) {
+      const r0 = Math.floor(i / G) * 16, c0 = (i % G) * 16; let R = 0, Gc = 0, B = 0;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const o = ((r0 + y) * 224 + c0 + x) * 4; R += d[o]; Gc += d[o + 1]; B += d[o + 2]; }
+      patchColor.push(new THREE.Color(R / 65280, Gc / 65280, B / 65280));
+    }
+    // annotated defect boxes, drawn after sampling so they don't tint the patch colors
+    c.strokeStyle = "#FF3B30"; c.lineWidth = 2;
+    SAMPLE.bboxes.forEach(([x0, y0, x1, y1]) => c.strokeRect(x0, y0, x1 - x0, y1 - y0));
+  }
+
+  // CLS -> token attention of encoder layer l (1-6), head h: 196 patches then CLS
+  const attention = (layer, head) => SAMPLE.attention[layer - 1][head];
+  const defectShare = (layer, head) => { let t = 0; defectPatches.forEach(i => t += attention(layer, head)[i]); return t; };
+
+  // ---------- three.js scene ----------
+  readTheme();
+  const host = document.getElementById("stage");
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+  renderer.setClearColor(0x000000, 0);
+  host.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-6, 9, 7); scene.add(sun);
+
+  const gridY = r => (6.5 - r) * S, gridZ = c => (c - 6.5) * S;
+  const CLS_Y = 6.5 * S + 0.55;
+  function tokenPos(slab, i, v = new THREE.Vector3()) {
+    return i === N ? v.set(SLAB_X[slab], CLS_Y, 0) : v.set(SLAB_X[slab], gridY(Math.floor(i / G)), gridZ(i % G));
+  }
+
+  // input image
+  const tex = new THREE.CanvasTexture(swatch);
+  tex.magFilter = THREE.NearestFilter;
+  const img = new THREE.Mesh(new THREE.PlaneGeometry(G * S, G * S), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  img.rotation.y = -Math.PI / 2; scene.add(img);
+  const gridPts = [];
+  for (let k = 0; k <= G; k++) {
+    const p = (k - 7) * S, h = 7 * S;
+    gridPts.push(-0.01, p, -h, -0.01, p, h, -0.01, -h, p, -0.01, h, p);
+  }
+  const gridGeo = new THREE.BufferGeometry(); gridGeo.setAttribute("position", new THREE.Float32BufferAttribute(gridPts, 3));
+  const gridLines = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
+  scene.add(gridLines);
+
+  // projection lines: each 16x16 patch -> its token
+  const projPts = [];
+  for (let i = 0; i < N; i++) { const a = tokenPos(0, i); projPts.push(0.02, a.y, a.z, a.x - 0.1, a.y, a.z); }
+  const projGeo = new THREE.BufferGeometry(); projGeo.setAttribute("position", new THREE.Float32BufferAttribute(projPts, 3));
+  const projMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.2 });
+  scene.add(new THREE.LineSegments(projGeo, projMat));
+
+  // tokens: 9 slabs x 197 tokens
+  const SLABS = SLAB_X.length, COUNT = SLABS * T;
+  const tokens = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), COUNT);
+  scene.add(tokens);
+  const baseColor = Array.from({ length: COUNT }, () => new THREE.Color());
+  const dummy = new THREE.Object3D(), tmpV = new THREE.Vector3(), tmpC = new THREE.Color();
+  function setTokenMatrices(pulse) {
+    for (let s = 0; s < SLABS; s++) {
+      const k = pulse == null ? 1 : 1 + 0.6 * Math.exp(-((pulse - (s + 1)) ** 2) / 0.35);
+      for (let i = 0; i < T; i++) {
+        tokenPos(s, i, dummy.position);
+        const sz = (i === N ? (s === 0 ? 1e-4 : 0.28) : 0.165) * k;
+        dummy.scale.set(i === N ? sz : 0.12 * k, sz, sz);
+        dummy.updateMatrix(); tokens.setMatrixAt(s * T + i, dummy.matrix);
+      }
+    }
+    tokens.instanceMatrix.needsUpdate = true;
+  }
+  // stage 0 uses each patch's average color so it reads back to the image;
+  // later stages use the top 3 principal components of the real token features
+  function computeBaseColors() {
+    for (let s = 0; s < SLABS; s++) {
+      const rgb = SAMPLE.token_rgb[s];
+      for (let i = 0; i < T; i++) {
+        const c = baseColor[s * T + i];
+        if (i === N) { c.copy(s === 0 ? TH.muted : TH.saffron); continue; }
+        if (s === 0) { c.copy(patchColor[i]); continue; }
+        c.setRGB(rgb[i * 3] / 255, rgb[i * 3 + 1] / 255, rgb[i * 3 + 2] / 255);
+      }
+    }
+  }
+
+  // slab frames + CLS residual path
+  const frameMat = new THREE.LineBasicMaterial();
+  const frameGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.34, 4.1, 3.5));
+  SLAB_X.forEach(x => { const f = new THREE.LineSegments(frameGeo, frameMat); f.position.set(x, 0.3, 0); scene.add(f); });
+  const pathMat = new THREE.LineBasicMaterial();
+  {
+    const p = SLAB_X.slice(1).map(x => new THREE.Vector3(x, CLS_Y, 0));
+    const g1 = new THREE.BufferGeometry().setFromPoints([...p, new THREE.Vector3(HEAD_X.pattern, CLS_Y + 0.4, 0)]);
+    const g2 = new THREE.BufferGeometry().setFromPoints([p[p.length - 1], new THREE.Vector3(HEAD_X.defect, CLS_Y + 0.4, 0)]);
+    scene.add(new THREE.Line(g1, pathMat), new THREE.Line(g2, pathMat));
+  }
+
+  // heads: bar charts of the softmax outputs
+  const bars = [], barGeo = new THREE.BoxGeometry(1, 1, 1);
+  PATTERNS.forEach((_, k) => bars.push({ head: "pattern", k, x: HEAD_X.pattern, z: (k - 9) * 0.17, w: 0.12 }));
+  DEFECTS.forEach((_, k) => bars.push({ head: "defect", k, x: HEAD_X.defect, z: (k - 0.5) * 0.7, w: 0.42 }));
+  bars.forEach(b => { b.mesh = new THREE.Mesh(barGeo, new THREE.MeshLambertMaterial()); scene.add(b.mesh); });
+  // small markers above the ground-truth bar of each head
+  const truthMat = new THREE.MeshBasicMaterial();
+  const truthMarks = { pattern: new THREE.Mesh(new THREE.OctahedronGeometry(0.09), truthMat), defect: new THREE.Mesh(new THREE.OctahedronGeometry(0.12), truthMat) };
+  scene.add(truthMarks.pattern, truthMarks.defect);
+  function updateBars() {
+    bars.forEach(b => {
+      b.p = (b.head === "pattern" ? SAMPLE.pattern_probs : SAMPLE.defect_probs)[b.k];
+      const h = 0.04 + b.p * 3.2;
+      b.mesh.scale.set(b.w, h, b.w); b.mesh.position.set(b.x, -1.43 + h / 2, b.z);
+      const truth = b.k === (b.head === "pattern" ? SAMPLE.true_pattern : SAMPLE.true_defect);
+      if (truth) truthMarks[b.head].position.set(b.x, -1.43 + h + 0.3, b.z);
+    });
+  }
+  const plateMat = new THREE.LineBasicMaterial();
+  [[HEAD_X.pattern, 1.75], [HEAD_X.defect, 0.85]].forEach(([x, hw]) => {
+    const g = new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.5, hw * 2));
+    const m = new THREE.LineSegments(g, plateMat); m.rotation.x = -Math.PI / 2; m.rotation.z = Math.PI / 2;
+    m.position.set(x, -1.45, 0); scene.add(m);
+  });
+  function colorBars() {
+    const topP = argmax(SAMPLE.pattern_probs);
+    bars.forEach(b => {
+      b.mesh.material.color.copy(b.head === "defect" ? (b.k === 1 ? TH.rose : TH.teal) : b.k === topP ? TH.saffron : TH.indigo);
+    });
+    truthMat.color.copy(TH.ink);
+  }
+
+  // labels
+  const labels = [];
+  function makeLabel(text, sub, pos) {
+    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 160;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }));
+    sp.position.copy(pos); sp.scale.set(2.4, 0.75, 1); sp.userData = { cv, text, sub };
+    scene.add(sp); labels.push(sp);
+  }
+  function paintLabels() {
+    labels.forEach(sp => {
+      const { cv, text, sub } = sp.userData, c = cv.getContext("2d");
+      c.clearRect(0, 0, cv.width, cv.height); c.textAlign = "center";
+      c.fillStyle = TH.hex("ink"); c.font = "700 52px 'Bricolage Grotesque', system-ui, sans-serif";
+      c.fillText(text, 256, 70);
+      c.fillStyle = TH.hex("muted"); c.font = "500 34px 'IBM Plex Mono', monospace";
+      c.fillText(sub, 256, 122);
+      sp.material.map.needsUpdate = true;
+    });
+  }
+  const LY = CLS_Y + 0.85;
+  makeLabel("Input", "3 × 224 × 224", new THREE.Vector3(0, LY - 0.3, 0));
+  makeLabel("Patch embed", "196 × 192", new THREE.Vector3(SLAB_X[0], LY, 0));
+  makeLabel("+CLS +pos", "197 × 192", new THREE.Vector3(SLAB_X[1], LY, 0));
+  for (let l = 1; l <= 6; l++) makeLabel("Layer " + l, "197 × 192", new THREE.Vector3(SLAB_X[l + 1], LY, 0));
+  makeLabel("LayerNorm", "CLS → 192", new THREE.Vector3(SLAB_X[8], LY, 0));
+  makeLabel("Pattern", "Linear 192→19", new THREE.Vector3(HEAD_X.pattern, LY, 0));
+  makeLabel("Defect", "Linear 192→2", new THREE.Vector3(HEAD_X.defect, LY, 0));
+
+  // attention lines (CLS of layer l -> patch tokens of layer l-1)
+  const attnGeo = new THREE.BufferGeometry();
+  const attnLines = new THREE.LineSegments(attnGeo, new THREE.LineBasicMaterial({ vertexColors: true }));
+  scene.add(attnLines);
+  let showAttn = true;
+  function updateAttention() {
+    const st = STAGES[current];
+    attnLines.visible = showAttn && !!st.layer;
+    if (!attnLines.visible) return;
+    const l = st.layer, pos = [], col = [], from = tokenPos(l + 1, N);
+    [TH.indigo, TH.saffron, TH.teal].forEach((hc, h) => {
+      const a = attention(l, h), idx = [...a.keys()].sort((p, q) => a[q] - a[p]).slice(0, 10), mx = a[idx[0]];
+      idx.forEach(i => {
+        const to = tokenPos(l, i);
+        pos.push(from.x, from.y, from.z, to.x, to.y, to.z);
+        tmpC.copy(TH.stage).lerp(hc, 0.3 + 0.7 * a[i] / mx);
+        col.push(tmpC.r, tmpC.g, tmpC.b, tmpC.r, tmpC.g, tmpC.b);
+      });
+    });
+    attnGeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    attnGeo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    attnGeo.computeBoundingSphere();
+  }
+
+  function applyHighlight() {
+    const st = STAGES[current], on = new Set(st.slabs), dimAll = on.size > 0;
+    for (let s = 0; s < SLABS; s++) for (let i = 0; i < T; i++) {
+      tmpC.copy(baseColor[s * T + i]);
+      if (dimAll && !on.has(s)) tmpC.lerp(TH.stage, 0.72);
+      tokens.setColorAt(s * T + i, tmpC);
+    }
+    tokens.instanceColor.needsUpdate = true;
+    projMat.opacity = st.key === "input" || st.key === "embed" ? 0.55 : 0.15;
+    img.material.opacity = 1;
+  }
+
+  function applyTheme() {
+    readTheme();
+    frameMat.color.copy(TH.line); pathMat.color.copy(TH.muted); plateMat.color.copy(TH.muted);
+    projMat.color.copy(TH.muted);
+    computeBaseColors(); colorBars(); paintLabels();
+    if (typeof current === "number") { applyHighlight(); updateAttention(); renderDetail(); }
+  }
+
+  // ---------- camera ----------
+  let fly = null;
+  function narrow() { return host.clientWidth / Math.max(1, host.clientHeight) < 1.1; }
+  function stageView(i) {
+    const st = STAGES[i], k = narrow() ? 1.7 : 1;
+    if (st.key === "heads") return [new THREE.Vector3(st.x - 5 * k, 2.4 * k, 7.5 * k), new THREE.Vector3(st.x, 0.2, 0)];
+    return [new THREE.Vector3(st.x - 4.6 * k, 2.4 * k, 6.6 * k), new THREE.Vector3(st.x + 0.6, 0.25, 0)];
+  }
+  function overview() {
+    const k = narrow() ? 1.9 : 1;
+    return [new THREE.Vector3(5 - 2 * k, 7.5 * k, 21 * k), new THREE.Vector3(13.2, 0.2, 0)];
+  }
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function flyTo([p, t]) {
+    if (reduce) { camera.position.copy(p); controls.target.copy(t); return; }
+    fly = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), p1: p, t1: t };
+  }
+  controls.addEventListener("start", () => fly = null);
+
+  // ---------- panel ----------
+  const stepsEl = document.getElementById("steps"), detailEl = document.getElementById("detail");
+  stepsEl.innerHTML = STAGES.map((st, i) => {
+    if (st.layer === 1) return `<li class="enc"><div class="enc-label"><span>Transformer encoder ×6</span><small>197×192</small></div><div class="chips">${
+      [1,2,3,4,5,6].map(l => `<button class="chip" type="button" data-i="${i + l - 1}" aria-label="Encoder layer ${l}">${l}</button>`).join("")}</div></li>`;
+    if (st.layer) return "";
+    return `<li><button class="step" type="button" data-i="${i}"><span>${st.name}</span><small>${st.small}</small></button></li>`;
+  }).join("");
+  stepsEl.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) select(+b.dataset.i); });
+
+  const layerBlock = `<div class="block">
+      <div><span>LayerNorm(192)</span><span>384</span></div>
+      <div><span>Multi-head self-attention · 3 × 64</span><span>148,224</span></div>
+      <div class="res"><span>x = x + attn(norm(x))</span><span></span></div>
+      <div><span>LayerNorm(192)</span><span>384</span></div>
+      <div><span>MLP 192 → 768 → 192 · GELU</span><span>295,872</span></div>
+      <div class="res"><span>x = x + mlp(norm(x))</span><span></span></div>
+    </div>`;
+  const barList = (names, ps, limit, truth) => {
+    const order = [...ps.keys()].sort((a, b) => ps[b] - ps[a]);
+    const shown = order.slice(0, limit);
+    if (!shown.includes(truth)) shown[shown.length - 1] = truth;
+    const rest = order.filter(i => !shown.includes(i)), mx = ps[order[0]];
+    let h = shown.map(i => `<div class="barrow${i === order[0] ? " top" : ""}"><span>${names[i]}${i === truth ? " ◆" : ""}</span><span class="track"><span class="fill" style="width:${ps[i] / mx * 100}%;display:block"></span></span><span class="pct">${pct(ps[i])}</span></div>`).join("");
+    if (rest.length) h += `<div class="barrow"><span class="note">${rest.length} others</span><span></span><span class="pct">${pct(rest.reduce((s, i) => s + ps[i], 0))}</span></div>`;
+    return `<div class="bars">${h}</div>`;
+  };
+  const verdict = ok => `<span class="tag ${ok ? "ok" : "bad"}">${ok ? "correct" : "wrong"}</span>`;
+
+  function detailHTML(st, i) {
+    const eyebrow = `<p class="eyebrow">Step ${i + 1} of ${STAGES.length}</p>`;
+    const kv = rows => `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+    const nBox = SAMPLE.bboxes.length;
+    switch (st.key) {
+      case "input": return `${eyebrow}<h2>Input image</h2>
+        <p>Test image <code>${SAMPLE.id}.jpg</code>, resized to 224 × 224 and normalized with ImageNet mean and std. The 14 × 14 grid shows the 16 × 16 patches.</p>
+        <canvas class="swatch" id="swatchCopy" width="224" height="224" aria-label="Test image ${SAMPLE.id}"></canvas>
+        ${kv([["True pattern", PATTERNS[SAMPLE.true_pattern]], ["True label", DEFECTS[SAMPLE.true_defect]], ["Defect boxes", nBox ? `${nBox} (red outline)` : "none"], ["Tensor", "(B, 3, 224, 224)"]])}
+        <p class="note">Defect boxes come from the annotation XML, scaled to 224 × 224. The model never sees them; they are drawn here so you can check where attention goes.</p>`;
+      case "embed": return `${eyebrow}<h2>Patch embedding</h2>
+        <p>A strided convolution turns each 16 × 16 × 3 patch into one 192-dim token in a single step. The result is flattened into a sequence.</p>
+        <code class="code">nn.Conv2d(3, 192, kernel_size=16, stride=16)
+x.flatten(2).transpose(1, 2)</code>
+        ${kv([["In", "(B, 3, 224, 224)"], ["Conv out", "(B, 192, 14, 14)"], ["Out", "(B, 196, 192)"], ["Parameters", "147,648"]])}
+        <p class="note">Tokens in this slab show their patch's average color. Every later slab colors tokens by the top 3 principal components of that stage's real 192-dim features.</p>`;
+      case "pos": return `${eyebrow}<h2>CLS token and position</h2>
+        <p>A learnable CLS token (gold, above the grid) is prepended, then a learnable positional embedding is added so the encoder knows where each patch came from. Dropout 0.1 follows during training.</p>
+        ${kv([["Out", "(B, 197, 192)"], ["CLS token", "192"], ["Pos. embedding", "197 × 192 = 37,824"]])}`;
+      case "norm": return `${eyebrow}<h2>Final LayerNorm</h2>
+        <p>The sequence is normalized once more. Only the CLS token's 192 values continue: it has gathered information from every patch across six layers.</p>
+        ${kv([["In", "(B, 197, 192)"], ["Out", "features = x[:, 0] → (B, 192)"], ["Parameters", "384"]])}`;
+      case "heads": {
+        const pp = argmax(SAMPLE.pattern_probs), dp = argmax(SAMPLE.defect_probs);
+        return `${eyebrow}<h2>Classification heads</h2>
+        <p>Two linear heads read the same CLS feature vector. Training sums their cross-entropy losses with weight 1.0 each. ◆ marks the true label.</p>
+        ${kv([["Pattern", `${PATTERNS[pp]} ${verdict(pp === SAMPLE.true_pattern)}`], ["Defect", `${DEFECTS[dp]} ${verdict(dp === SAMPLE.true_defect)}`]])}
+        <p class="eyebrow">pattern_head · Linear(192, 19)</p>${barList(PATTERNS, SAMPLE.pattern_probs, 6, SAMPLE.true_pattern)}
+        <p class="eyebrow">defect_head · Linear(192, 2)</p>${barList(DEFECTS, SAMPLE.defect_probs, 2, SAMPLE.true_defect)}`;
+      }
+      default: {
+        const shares = [0, 1, 2].map(h => defectShare(st.layer, h));
+        const best = shares.indexOf(Math.max(...shares));
+        return `${eyebrow}<h2>Encoder layer ${st.layer} of 6</h2>
+        <p>A pre-norm block from <code>nn.TransformerEncoderLayer(norm_first=True)</code>. Every token attends to all 197 tokens, then passes through the MLP. The shape never changes.</p>
+        ${layerBlock}
+        ${kv([["In → out", "(B, 197, 192)"], ["Parameters", "444,864"]])}
+        <p class="eyebrow">Where the CLS token looks</p>
+        <div class="heat">${[0, 1, 2].map(h => `<figure><canvas width="112" height="112" data-head="${h}" aria-label="Head ${h + 1} attention map"></canvas><figcaption>head ${h + 1} · self ${pct(attention(st.layer, h)[N], 0)}</figcaption></figure>`).join("")}</div>
+        ${nBox ? kv([["Attention on defect boxes", `head ${best + 1}: ${pct(shares[best])}`], ["Defect area of image", pct(defectPatches.size / N)]]) : ""}
+        <p class="note">Real CLS-row attention weights from the checkpoint${nBox ? ". Patches under a defect box are outlined in red" : ""}. Lines in the scene show each head's 10 strongest links.</p>`;
+      }
+    }
+  }
+  function renderDetail() {
+    const st = STAGES[current];
+    detailEl.innerHTML = detailHTML(st, current) + `<div class="nav"><button class="btn" type="button" id="prev"${current === 0 ? " disabled" : ""}>← Previous</button><button class="btn" type="button" id="next"${current === STAGES.length - 1 ? " disabled" : ""}>Next →</button></div>`;
+    detailEl.querySelector("#prev").onclick = () => select(current - 1);
+    detailEl.querySelector("#next").onclick = () => select(current + 1);
+    const sc = detailEl.querySelector("#swatchCopy"); if (sc) sc.getContext("2d").drawImage(swatch, 0, 0);
+    detailEl.querySelectorAll(".heat canvas").forEach(cv => {
+      const h = +cv.dataset.head, a = attention(st.layer, h), mx = Math.max(...a.slice(0, N)), c = cv.getContext("2d");
+      const hc = [TH.indigo, TH.saffron, TH.teal][h], u = cv.width / G;
+      for (let i = 0; i < N; i++) {
+        tmpC.copy(TH.stage).lerp(hc, Math.pow(a[i] / mx, 0.7));
+        c.fillStyle = "#" + tmpC.getHexString(); c.fillRect((i % G) * u, Math.floor(i / G) * u, u, u);
+      }
+      c.strokeStyle = TH.hex("rose"); c.lineWidth = 1.5;
+      defectPatches.forEach(i => c.strokeRect((i % G) * u + 1, Math.floor(i / G) * u + 1, u - 2, u - 2));
+    });
+  }
+
+  let current = 0;
+  function select(i, doFly = true) {
+    current = Math.max(0, Math.min(STAGES.length - 1, i));
+    stepsEl.querySelectorAll("[data-i]").forEach(b => b.setAttribute("aria-current", +b.dataset.i === current ? "true" : "false"));
+    renderDetail(); applyHighlight(); updateAttention();
+    if (doFly) flyTo(stageView(current));
+  }
+
+  // ---------- controls ----------
+  let playing = false, playT = 0;
+  const playBtn = document.getElementById("play");
+  playBtn.onclick = () => {
+    playing = !playing; playBtn.setAttribute("aria-pressed", playing); playT = 0;
+    playBtn.textContent = playing ? "Pause data flow" : "Play data flow";
+    if (!playing) setTokenMatrices(null);
+  };
+  document.getElementById("overview").onclick = () => flyTo(overview());
+  const attnBtn = document.getElementById("attn");
+  attnBtn.onclick = () => { showAttn = !showAttn; attnBtn.setAttribute("aria-pressed", showAttn); updateAttention(); };
+  addEventListener("keydown", e => {
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (e.key === "ArrowRight") { select(current + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { select(current - 1); e.preventDefault(); }
+  });
+
+  // click-to-select in the scene
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+  renderer.domElement.addEventListener("pointerdown", e => down = [e.clientX, e.clientY]);
+  renderer.domElement.addEventListener("pointerup", e => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects([img, tokens, ...bars.map(b => b.mesh)])[0];
+    if (!hit) return;
+    if (hit.object === img) select(0);
+    else if (hit.object === tokens) select(Math.floor(hit.instanceId / T) + 1);
+    else select(STAGES.length - 1);
+  });
+
+  // ---------- loop ----------
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(host);
+  const clock = new THREE.Clock();
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta());
+    if (fly) {
+      fly.t = Math.min(1, fly.t + dt / 0.9);
+      const e = fly.t < 0.5 ? 4 * fly.t ** 3 : 1 - (-2 * fly.t + 2) ** 3 / 2;
+      camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e);
+      if (fly.t === 1) fly = null;
+    }
+    if (playing) { playT += dt; setTokenMatrices((playT * 3) % 12 - 0.5); }
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- samples ----------
+  const sampleEl = document.getElementById("sample");
+  const TAGS = { defective: "defect", clean: "clean", mistake: "misclassified" };
+  sampleEl.innerHTML = DATA.samples.map((smp, i) => `<option value="${i}">${smp.id} · ${PATTERNS[smp.true_pattern]} · ${TAGS[smp.tag] || smp.tag}</option>`).join("");
+  function loadSample(i) {
+    const im = new Image();
+    im.onload = () => {
+      SAMPLE = DATA.samples[i];
+      defectPatches = patchesInBoxes(SAMPLE.bboxes);
+      paintSwatch(im); tex.needsUpdate = true;
+      computeBaseColors(); updateBars(); colorBars(); applyHighlight(); updateAttention(); renderDetail();
+    };
+    im.src = DATA.samples[i].image;
+  }
+  sampleEl.onchange = () => loadSample(+sampleEl.value);
+  const M = DATA.metrics;
+  document.getElementById("foot").textContent =
+    `Checkpoint from epoch ${M.epoch} (val loss ${M.val_loss.toFixed(3)}). On all ${fmt(M.test_samples)} test images it scores ` +
+    `${pct(M.pattern_acc)} pattern and ${pct(M.defect_acc)} defect accuracy. Regenerate the data with python src/export_viz.py.`;
+
+  // ---------- boot ----------
+  applyTheme();
+  updateBars();
+  setTokenMatrices(null);
+  resize();
+  const [p0, t0] = overview(); camera.position.copy(p0); controls.target.copy(t0);
+  select(0, false);
+  loadSample(0);
+  requestAnimationFrame(frame);
+  document.fonts && document.fonts.ready.then(paintLabels);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
